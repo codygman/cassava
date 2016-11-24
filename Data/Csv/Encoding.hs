@@ -14,6 +14,7 @@ module Data.Csv.Encoding
     -- * Encoding and decoding
       HasHeader(..)
     , decode
+    , decode'
     , decodeByName
     , Quoting(..)
     , encode
@@ -24,6 +25,7 @@ module Data.Csv.Encoding
     , DecodeOptions(..)
     , defaultDecodeOptions
     , decodeWith
+    , decodeWith'
     , decodeByNameWith
     , EncodeOptions(..)
     , defaultEncodeOptions
@@ -49,6 +51,7 @@ import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as BL8
 import qualified Data.HashMap.Strict as HM
 import Data.Vector (Vector)
+import qualified Data.Vector.Storable as SV
 import qualified Data.Vector as V
 import Data.Word (Word8)
 import Data.Monoid
@@ -80,6 +83,15 @@ decode :: FromRecord a
        -> Either String (Vector a)
 decode = decodeWith defaultDecodeOptions
 {-# INLINE decode #-}
+
+decode' :: (SV.Storable a, FromRecord a)
+       => HasHeader     -- ^ Data contains header that should be
+                        -- skipped
+       -> L.ByteString  -- ^ CSV data
+       -> Either String (SV.Vector a)
+decode' = decodeWith' defaultDecodeOptions
+{-# INLINE decode' #-}
+
 
 -- | Efficiently deserialize CSV records from a lazy 'L.ByteString'.
 -- If this fails due to incomplete or invalid input, @'Left' msg@ is
@@ -121,6 +133,16 @@ decodeWith :: FromRecord a
            -> Either String (Vector a)
 decodeWith = decodeWithC csv
 {-# INLINE [1] decodeWith #-}
+
+  
+decodeWith' :: (FromRecord a, SV.Storable a)
+           => DecodeOptions  -- ^ Decoding options
+           -> HasHeader      -- ^ Data contains header that should be
+                             -- skipped
+           -> L.ByteString   -- ^ CSV data
+           -> Either String (SV.Vector a)
+decodeWith' = decodeWithC csv'
+{-# INLINE [1] decodeWith' #-}
 
 {-# RULES
     "idDecodeWith" decodeWith = idDecodeWith
@@ -371,6 +393,25 @@ csv !opts = do
                     !vals <- (endOfLine *> records) <|> AP.pure []
                     return (val : vals)
 {-# INLINE csv #-}
+  
+csv' :: (SV.Storable a, FromRecord a) => DecodeOptions -> AL.Parser (SV.Vector a)
+csv' !opts = do
+    vals <- records
+    _ <- optional endOfLine
+    endOfInput
+    return $! SV.fromList vals
+  where
+    records = do
+        !r <- record (decDelimiter opts)
+        if blankLine r
+            then (endOfLine *> records) <|> pure []
+            else case runParser (parseRecord r) of
+                Left msg  -> fail $ "conversion error: " ++ msg
+                Right val -> do
+                    !vals <- (endOfLine *> records) <|> AP.pure []
+                    return (val : vals)
+{-# INLINE csv' #-}
+
 
 -- | Parse a CSV file that includes a header.
 csvWithHeader :: FromNamedRecord a => DecodeOptions

@@ -36,6 +36,7 @@ module Data.Csv
     -- $encoding
       HasHeader(..)
     , decode
+    , decode'
     , decodeByName
     , encode
     , encodeByName
@@ -47,6 +48,7 @@ module Data.Csv
     , DecodeOptions(..)
     , defaultDecodeOptions
     , decodeWith
+    , decodeWith'
     , decodeByNameWith
     , EncodeOptions(..)
     , Quoting(..)
